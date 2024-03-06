@@ -1,0 +1,28 @@
+{
+  "name": "sysbench",
+  "version": "1.1.0",
+  "description": "系统基准测试工具",
+  "task_type": {
+    "BuildFromSource": {
+      "Git": {
+        "url": "https://github.com/akopytov/sysbench"
+      }
+    }
+  },
+  "depends": [],
+  "build": {
+    "build_command": "./autogen.sh && ./configure --without-mysql --host=$ARCH-linux-musl --prefix=$DADK_CURRENT_BUILD_DIR && make install -j $(nproc)"
+  },
+  "clean": {
+    "clean_command": "make clean"
+  },
+  "install": {
+    "in_dragonos_path": "/"
+  },
+  "envs": [
+    {
+      "key": "CFLAGS",
+      "value": "-static"
+    }
+  ]
+}

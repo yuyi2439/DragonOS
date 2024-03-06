@@ -1,4 +1,5 @@
 # 导入环境变量
+include compiler.mk
 include ../env.mk
 
 export ARCH ?= x86_64
