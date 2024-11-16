@@ -1055,7 +1055,7 @@ impl Syscall {
             SYS_SCHED_YIELD => Self::do_sched_yield(),
 
             SYS_SCHED_GETAFFINITY => {
-                let pid = args[0] as i32;
+                let pid = args[0];
                 let size = args[1];
                 let set_vaddr = args[2];
 
@@ -1064,6 +1064,18 @@ impl Syscall {
                 let set: &mut [u8] = user_buffer_writer.buffer(0)?;
 
                 Self::getaffinity(pid, set)
+            }
+
+            SYS_SCHED_SETAFFINITY => {
+                let pid = args[0];
+                let size = args[1];
+                let set_vaddr = args[2];
+
+                let user_buffer_reader =
+                    UserBufferReader::new(set_vaddr as *mut u8, size, frame.is_from_user())?;
+                let set: &[u8] = user_buffer_reader.buffer(0)?;
+
+                Self::setaffinity(pid, set)
             }
 
             #[cfg(target_arch = "x86_64")]
@@ -1107,7 +1119,6 @@ impl Syscall {
                 Err(SystemError::ENOSYS)
             }
 
-            // SYS_SCHED_YIELD => Self::sched_yield(),
             SYS_UNAME => {
                 let name = args[0] as *mut PosixOldUtsName;
                 Self::uname(name)

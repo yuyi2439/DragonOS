@@ -33,16 +33,10 @@ use crate::{
     },
     ipc::signal_types::{SigInfo, SigPending, SignalStruct},
     libs::{
-        align::AlignedBox,
-        casting::DowncastArc,
-        futex::{
+        align::AlignedBox, casting::DowncastArc, cpumask::CpuMask, futex::{
             constant::{FutexFlag, FUTEX_BITSET_MATCH_ANY},
             futex::{Futex, RobustListHead},
-        },
-        lock_free_flags::LockFreeFlags,
-        rwlock::{RwLock, RwLockReadGuard, RwLockWriteGuard},
-        spinlock::{SpinLock, SpinLockGuard},
-        wait_queue::WaitQueue,
+        }, lock_free_flags::LockFreeFlags, rwlock::{RwLock, RwLockReadGuard, RwLockWriteGuard}, spinlock::{SpinLock, SpinLockGuard}, wait_queue::WaitQueue
     },
     mm::{
         percpu::{PerCpu, PerCpuVar},
@@ -58,7 +52,7 @@ use crate::{
     },
     smp::{
         core::smp_get_processor_id,
-        cpu::{AtomicProcessorId, ProcessorId},
+        cpu::{smp_cpu_manager, AtomicProcessorId, ProcessorId},
         kick_cpu,
     },
     syscall::{user_access::clear_user, Syscall},
@@ -606,6 +600,8 @@ bitflags! {
         const NEED_MIGRATE = 1 << 7;
         /// 随机化的虚拟地址空间，主要用于动态链接器的加载
         const RANDOMIZE = 1 << 8;
+        /// 用户态不被允许修改 cpus_mask
+        const NO_SETAFFINITY = 1 << 9;
     }
 }
 #[derive(Debug)]
@@ -1247,11 +1243,13 @@ pub struct InnerSchedInfo {
     state: ProcessState,
     /// 进程的调度策略
     sleep: bool,
+    
+    pub cpu_mask: CpuMask,
 }
 
 impl InnerSchedInfo {
     pub fn state(&self) -> ProcessState {
-        return self.state;
+        self.state
     }
 
     pub fn set_state(&mut self, state: ProcessState) {
@@ -1275,12 +1273,14 @@ impl ProcessSchedulerInfo {
     #[inline(never)]
     pub fn new(on_cpu: Option<ProcessorId>) -> Self {
         let cpu_id = on_cpu.unwrap_or(ProcessorId::INVALID);
+        let cpu_manager = smp_cpu_manager();
         return Self {
             on_cpu: AtomicProcessorId::new(cpu_id),
             // migrate_to: AtomicProcessorId::new(ProcessorId::INVALID),
             inner_locked: RwLock::new(InnerSchedInfo {
                 state: ProcessState::Blocked(false),
                 sleep: false,
+                cpu_mask: cpu_manager.possible_cpus().clone(),
             }),
             // virtual_runtime: AtomicIsize::new(0),
             // rt_time_slice: AtomicIsize::new(0),

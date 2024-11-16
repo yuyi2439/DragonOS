@@ -1,4 +1,4 @@
-use core::ops::BitAnd;
+use core::{cmp::min, ops::BitAnd};
 
 use alloc::vec::Vec;
 
@@ -19,6 +19,27 @@ impl AllocBitmap {
             data,
             core: BitMapCore::new(),
         }
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        let bytes_per_usize = usize::BITS as usize / 8;
+
+        let elements = bytes.len() * 8;
+        let mut bitmap = Self::new(elements);
+
+        let mut usize_index = 0;
+        // 将字节数组按usize大小分组处理
+        for i in (0..bytes.len()).step_by(bytes_per_usize) {
+            let mut usize_value = 0;
+            // 将当前组中的字节合并成一个usize
+            for &byte in &bytes[i..min(i + bytes_per_usize, bytes.len())] {
+                usize_value = (usize_value << 8) | (byte as usize);
+            }
+            bitmap.data[usize_index] = usize_value;
+            usize_index += 1;
+        }
+
+        bitmap
     }
 
     pub fn bitand_assign(&mut self, rhs: &Self) {

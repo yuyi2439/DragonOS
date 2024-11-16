@@ -16,6 +16,10 @@ impl CpuMask {
         Self { bmp }
     }
 
+    pub fn from_bitmap(bmp: AllocBitmap) -> Self {
+        Self { bmp }
+    }
+
     /// # from_cpu - 从指定的CPU创建CPU掩码
     ///
     /// 该函数用于根据给定的CPU标识创建一个CPU掩码，只有指定的CPU被设置为激活状态。
