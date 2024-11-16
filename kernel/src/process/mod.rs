@@ -1273,14 +1273,18 @@ impl ProcessSchedulerInfo {
     #[inline(never)]
     pub fn new(on_cpu: Option<ProcessorId>) -> Self {
         let cpu_id = on_cpu.unwrap_or(ProcessorId::INVALID);
-        let cpu_manager = smp_cpu_manager();
+        let cpu_mask = if on_cpu.is_some() {
+            smp_cpu_manager().possible_cpus().clone()
+        } else {
+            CpuMask::new()
+        };
         return Self {
             on_cpu: AtomicProcessorId::new(cpu_id),
             // migrate_to: AtomicProcessorId::new(ProcessorId::INVALID),
             inner_locked: RwLock::new(InnerSchedInfo {
                 state: ProcessState::Blocked(false),
                 sleep: false,
-                cpu_mask: cpu_manager.possible_cpus().clone(),
+                cpu_mask,
             }),
             // virtual_runtime: AtomicIsize::new(0),
             // rt_time_slice: AtomicIsize::new(0),
