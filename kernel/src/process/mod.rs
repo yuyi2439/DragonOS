@@ -35,6 +35,7 @@ use crate::{
     libs::{
         align::AlignedBox,
         casting::DowncastArc,
+        cpumask::CpuMask,
         futex::{
             constant::{FutexFlag, FUTEX_BITSET_MATCH_ANY},
             futex::{Futex, RobustListHead},
@@ -54,11 +55,11 @@ use crate::{
     net::socket::SocketInode,
     sched::{
         completion::Completion, cpu_rq, fair::FairSchedEntity, prio::MAX_PRIO, DequeueFlag,
-        EnqueueFlag, OnRq, SchedMode, WakeupFlags, __schedule,
+        EnqueueFlag, OnRq, SchedMode, SchedPolicy, WakeupFlags, __schedule,
     },
     smp::{
         core::smp_get_processor_id,
-        cpu::{AtomicProcessorId, ProcessorId},
+        cpu::{smp_cpu_manager, AtomicProcessorId, ProcessorId},
         kick_cpu,
     },
     syscall::{user_access::clear_user, Syscall},
@@ -710,9 +711,9 @@ impl ProcessControlBlock {
 
     #[inline(never)]
     fn do_create_pcb(name: String, kstack: KernelStack, is_idle: bool) -> Arc<Self> {
-        let (pid, ppid, cwd, cred, tty) = if is_idle {
+        let (pid, ppid, cwd, cred, tty, on_cpu) = if is_idle {
             let cred = INIT_CRED.clone();
-            (Pid(0), Pid(0), "/".to_string(), cred, None)
+            (Pid(0), Pid(0), "/".to_string(), cred, None, None)
         } else {
             let ppid = ProcessManager::current_pcb().pid();
             let mut cred = ProcessManager::current_pcb().cred();
@@ -720,14 +721,15 @@ impl ProcessControlBlock {
             cred.cap_effective = cred.cap_ambient;
             let cwd = ProcessManager::current_pcb().basic().cwd();
             let tty = ProcessManager::current_pcb().sig_info_irqsave().tty();
-            (Self::generate_pid(), ppid, cwd, cred, tty)
+            let on_cpu = Some(smp_get_processor_id());
+            (Self::generate_pid(), ppid, cwd, cred, tty, on_cpu)
         };
 
         let basic_info = ProcessBasicInfo::new(Pid(0), ppid, Pid(0), name, cwd, None);
         let preempt_count = AtomicUsize::new(0);
         let flags = unsafe { LockFreeFlags::new(ProcessFlags::empty()) };
 
-        let sched_info = ProcessSchedulerInfo::new(None);
+        let sched_info = ProcessSchedulerInfo::new(on_cpu);
         let arch_info = SpinLock::new(ArchPCBInfo::new(&kstack));
 
         let ppcb: Weak<ProcessControlBlock> = ProcessManager::find(ppid)
@@ -1195,9 +1197,10 @@ impl ProcessBasicInfo {
 pub struct ProcessSchedulerInfo {
     /// 当前进程所在的cpu
     on_cpu: AtomicProcessorId,
-    /// 如果当前进程等待被迁移到另一个cpu核心上（也就是flags中的PF_NEED_MIGRATE被置位），
+    /// 如果当前进程等待被迁移到另一个cpu核心上（也就是flags中的 NEED_MIGRATE 被置位），
     /// 该字段存储要被迁移到的目标处理器核心号
-    // migrate_to: AtomicProcessorId,
+    migrate_to: AtomicProcessorId,
+    cpu_mask: RwLock<CpuMask>,
     inner_locked: RwLock<InnerSchedInfo>,
     /// 进程的调度优先级
     // priority: SchedPriority,
@@ -1207,7 +1210,7 @@ pub struct ProcessSchedulerInfo {
     // rt_time_slice: AtomicIsize,
     pub sched_stat: RwLock<SchedInfo>,
     /// 调度策略
-    pub sched_policy: RwLock<crate::sched::SchedPolicy>,
+    pub sched_policy: RwLock<SchedPolicy>,
     /// cfs调度实体
     pub sched_entity: Arc<FairSchedEntity>,
     pub on_rq: SpinLock<OnRq>,
@@ -1279,10 +1282,15 @@ impl InnerSchedInfo {
 impl ProcessSchedulerInfo {
     #[inline(never)]
     pub fn new(on_cpu: Option<ProcessorId>) -> Self {
-        let cpu_id = on_cpu.unwrap_or(ProcessorId::INVALID);
+        let (cpu_id, cpu_mask) = if let Some(on_cpu) = on_cpu {
+            (on_cpu, smp_cpu_manager().possible_cpus().clone())
+        } else {
+            (ProcessorId::INVALID, CpuMask::new())
+        };
         return Self {
             on_cpu: AtomicProcessorId::new(cpu_id),
-            // migrate_to: AtomicProcessorId::new(ProcessorId::INVALID),
+            migrate_to: AtomicProcessorId::new(ProcessorId::INVALID),
+            cpu_mask: RwLock::new(cpu_mask),
             inner_locked: RwLock::new(InnerSchedInfo {
                 state: ProcessState::Blocked(false),
                 sleep: false,
