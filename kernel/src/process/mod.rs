@@ -1200,7 +1200,7 @@ pub struct ProcessSchedulerInfo {
     /// 如果当前进程等待被迁移到另一个cpu核心上（也就是flags中的 NEED_MIGRATE 被置位），
     /// 该字段存储要被迁移到的目标处理器核心号
     migrate_to: AtomicProcessorId,
-    cpu_mask: RwLock<CpuMask>,
+    cpumask: RwLock<CpuMask>,
     inner_locked: RwLock<InnerSchedInfo>,
     /// 进程的调度优先级
     // priority: SchedPriority,
@@ -1290,7 +1290,7 @@ impl ProcessSchedulerInfo {
         return Self {
             on_cpu: AtomicProcessorId::new(cpu_id),
             migrate_to: AtomicProcessorId::new(ProcessorId::INVALID),
-            cpu_mask: RwLock::new(cpu_mask),
+            cpumask: RwLock::new(cpu_mask),
             inner_locked: RwLock::new(InnerSchedInfo {
                 state: ProcessState::Blocked(false),
                 sleep: false,
@@ -1327,23 +1327,27 @@ impl ProcessSchedulerInfo {
         }
     }
 
-    // pub fn migrate_to(&self) -> Option<ProcessorId> {
-    //     let migrate_to = self.migrate_to.load(Ordering::SeqCst);
-    //     if migrate_to == ProcessorId::INVALID {
-    //         return None;
-    //     } else {
-    //         return Some(migrate_to);
-    //     }
-    // }
+    pub fn migrate_to(&self) -> Option<ProcessorId> {
+        let migrate_to = self.migrate_to.load(Ordering::SeqCst);
+        if migrate_to == ProcessorId::INVALID {
+            return None;
+        } else {
+            return Some(migrate_to);
+        }
+    }
 
-    // pub fn set_migrate_to(&self, migrate_to: Option<ProcessorId>) {
-    //     if let Some(data) = migrate_to {
-    //         self.migrate_to.store(data, Ordering::SeqCst);
-    //     } else {
-    //         self.migrate_to
-    //             .store(ProcessorId::INVALID, Ordering::SeqCst)
-    //     }
-    // }
+    pub fn set_migrate_to(&self, migrate_to: Option<ProcessorId>) {
+        if let Some(data) = migrate_to {
+            self.migrate_to.store(data, Ordering::SeqCst);
+        } else {
+            self.migrate_to
+                .store(ProcessorId::INVALID, Ordering::SeqCst)
+        }
+    }
+
+    pub fn cpumask(&self) -> &RwLock<CpuMask> {
+        &self.cpumask
+    }
 
     pub fn inner_lock_write_irqsave(&self) -> RwLockWriteGuard<InnerSchedInfo> {
         return self.inner_locked.write_irqsave();

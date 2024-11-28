@@ -1069,7 +1069,7 @@ impl Syscall {
             SYS_SCHED_YIELD => Self::do_sched_yield(),
 
             SYS_SCHED_GETAFFINITY => {
-                let pid = args[0] as i32;
+                let pid = args[0];
                 let size = args[1];
                 let set_vaddr = args[2];
 
