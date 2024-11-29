@@ -1,4 +1,5 @@
 use bitmap::traits::BitMapOps;
+use log::debug;
 use system_error::SystemError;
 
 use crate::{
@@ -12,6 +13,7 @@ impl Syscall {
         let binding = pcb.sched_info().cpumask();
         let mask = binding.read();
         let src = unsafe { mask.inner().as_bytes() };
+        debug!("{:?}", src);
         set[0..src.len()].copy_from_slice(src);
         Ok(0)
     }
