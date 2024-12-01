@@ -10,8 +10,7 @@ use crate::{
 impl Syscall {
     pub fn getaffinity(pid: usize, set: &mut [u8]) -> Result<usize, SystemError> {
         let pcb = ProcessManager::find(Pid::from(pid)).unwrap_or(ProcessManager::current_pcb());
-        let binding = pcb.sched_info().cpumask();
-        let mask = binding.read();
+        let mask = pcb.sched_info().cpumask().read();
         let src = unsafe { mask.inner().as_bytes() };
         debug!("{:?}", src);
         set[0..src.len()].copy_from_slice(src);

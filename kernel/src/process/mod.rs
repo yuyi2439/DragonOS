@@ -1287,6 +1287,7 @@ impl ProcessSchedulerInfo {
         } else {
             (ProcessorId::INVALID, CpuMask::new())
         };
+        log::debug!("{:?}", cpu_mask);
         return Self {
             on_cpu: AtomicProcessorId::new(cpu_id),
             migrate_to: AtomicProcessorId::new(ProcessorId::INVALID),
