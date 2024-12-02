@@ -4,7 +4,7 @@ use bitmap::{traits::BitMapOps, AllocBitmap};
 
 use crate::{mm::percpu::PerCpu, smp::cpu::ProcessorId};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CpuMask {
     bmp: AllocBitmap,
 }
@@ -150,13 +150,5 @@ impl Iterator for CpuMaskIter<'_> {
         }
 
         result
-    }
-}
-
-impl core::fmt::Debug for CpuMask {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("CpuMask")
-            .field("bmp", &format!("size: {}", self.bmp.size()))
-            .finish()
     }
 }
